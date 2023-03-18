@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use serialport::{DataBits, SerialPort, StopBits};
 
-use crate::m100_sys;
+use crate::{m100_sys, protocol};
 
 pub static DEFAULT_PASSWORD: [u8; 8] = [0x30; 8];
 
@@ -80,24 +80,31 @@ impl M100Device {
         // mode 0x00 = hardware
         // mode 0x01 = software
         // mode 0x02 = manufacturer
-        let command = unsafe { m100_sys::version(0x0, self.pbuf.as_mut_ptr() as *mut _) };
-        self.send_command(command)?;
+
+        let command = protocol::get_version()?;
+        self.port.write(&command)?;
+        self.port.flush()?;
+
         let res = self.receive_response()?;
 
         Ok(std::str::from_utf8(res)?)
     }
 
     pub fn set_hfss_status(&mut self, status: HfssStatus) -> Result<()> {
-        let command = unsafe { m100_sys::setHFSS(status as u8, self.pbuf.as_mut_ptr() as *mut _) };
-        self.send_command(command)?;
+        let command = protocol::set_hfss_status(status)?;
+        self.port.write(&command)?;
+        self.port.flush()?;
+
         self.receive_response()?;
 
         Ok(())
     }
 
     pub fn query(&mut self) -> Result<Option<TagInfo>> {
-        let command = unsafe { m100_sys::query(1, self.pbuf.as_mut_ptr() as *mut _) };
-        self.send_command(command)?;
+        let command = protocol::query()?;
+        self.port.write(&command)?;
+        self.port.flush()?;
+
         let res = self.receive_response()?;
         if res.len() <= 1 {
             return Ok(None);
@@ -236,6 +243,7 @@ impl M100Device {
 
     fn send_command(&mut self, len: u32) -> Result<()> {
         let to_send = &self.pbuf[0..len as usize];
+        println!("Native: {:?}", to_send);
         self.port.write(to_send)?;
         self.port.flush()?;
 

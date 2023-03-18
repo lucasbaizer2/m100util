@@ -5,6 +5,7 @@ use anyhow::Result;
 use clap::{Parser, ValueEnum};
 
 pub mod m100;
+pub mod protocol;
 pub mod m100_sys;
 
 #[derive(clap::Parser)]
