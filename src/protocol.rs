@@ -7,9 +7,11 @@ use crate::m100::{HfssStatus, MemoryBank};
 #[repr(u8)]
 pub enum Command {
     GetVersion = 0x03,
+    Idle = 0x04,
     Query = 0x22,
     ReadData = 0x39,
     SetHfss = 0xAD,
+    WriteData = 0x49,
 }
 
 pub fn get_version() -> Result<Vec<u8>> {
@@ -24,6 +26,10 @@ pub fn query() -> Result<Vec<u8>> {
     make_frame(Command::Query, &[0x00, 0x00])
 }
 
+pub fn idle() -> Result<Vec<u8>> {
+    make_frame(Command::Idle, &[0x00, 0x01, 0x00])
+}
+
 pub fn read_data(password: &[u8], bank: MemoryBank, address: u16, data_length: u16) -> Result<Vec<u8>> {
     let mut payload = Vec::new();
     payload.write(password)?;
@@ -32,6 +38,37 @@ pub fn read_data(password: &[u8], bank: MemoryBank, address: u16, data_length: u
     payload.write_u16::<BE>(data_length)?;
 
     make_frame(Command::ReadData, &payload)
+}
+
+pub fn write_data(password: &[u8], bank: MemoryBank, address: u16, data: &[u8]) -> Result<Vec<u8>> {
+    if bank == MemoryBank::Epc {
+        panic!("use write_epc instead");
+    }
+    
+    let mut payload = Vec::new();
+    payload.write(password)?;
+    payload.write_u8(bank as u8)?;
+    payload.write_u16::<BE>(address)?;
+    payload.write_u16::<BE>(data.len() as u16)?;
+    payload.write(data)?;
+
+    make_frame(Command::WriteData, &payload)
+}
+
+pub fn write_epc(password: &[u8], data: &[u8]) -> Result<Vec<u8>> {
+    let mut payload = Vec::new();
+    payload.write(password)?;
+    payload.write_u8(MemoryBank::Epc as u8)?;
+    payload.write_u8(0x00)?; // magic byte?
+    payload.write_u8(0x01)?; // magic byte?
+    payload.write_u16::<BE>(data.len() as u16)?;
+
+    let pc = ((data.len() as u16) << 10) & 0xF800; // more magic??
+    payload.write_u16::<BE>(pc)?;
+
+    payload.write(data)?;
+
+    make_frame(Command::WriteData, &payload)
 }
 
 pub fn make_frame(cmd: Command, payload: &[u8]) -> Result<Vec<u8>> {

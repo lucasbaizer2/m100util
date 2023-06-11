@@ -1,12 +1,9 @@
-use std::time::Duration;
-
 use crate::m100::{M100Device, MemoryBank};
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 
 pub mod m100;
 pub mod protocol;
-pub mod m100_sys;
 
 #[derive(clap::Parser)]
 struct Cli {
@@ -40,19 +37,6 @@ fn main() -> Result<()> {
 
     let port = serialport::new(args.port, 115200).open().unwrap();
     let mut m100 = M100Device::new(port)?;
-
-    if let Err(e) = m100.get_version() {
-        println!("Could not receive device version: {}", e);
-        println!("Uploading firmware...");
-        m100.set_baud_rate(9600)?;
-        std::thread::sleep(Duration::from_millis(100));
-
-        m100.upload_firmware(include_bytes!("../native/firmware.bin"))?;
-        m100.set_hfss_status(m100::HfssStatus::Auto)
-            .expect("set hfss status failed");
-        println!("Uploaded firmware.");
-        std::thread::sleep(Duration::from_millis(100));
-    }
 
     let version = m100.get_version()?;
     println!("Connected to '{}'.", version);

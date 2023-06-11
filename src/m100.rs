@@ -3,14 +3,13 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use serialport::{DataBits, SerialPort, StopBits};
 
-use crate::{m100_sys, protocol};
+use crate::protocol;
 
 pub static DEFAULT_PASSWORD: [u8; 8] = [0x30; 8];
 
 pub struct M100Device {
     port: Box<dyn SerialPort>,
     read_buf: [u8; 1024],
-    pbuf: [u8; 1024],
 }
 
 impl M100Device {
@@ -22,7 +21,6 @@ impl M100Device {
         Ok(M100Device {
             port,
             read_buf: [0; 1024],
-            pbuf: [0; 1024],
         })
     }
 
@@ -33,7 +31,7 @@ impl M100Device {
 
     pub fn upload_firmware(&mut self, firmware: &[u8]) -> Result<()> {
         self.port.set_baud_rate(9600)?;
-        
+
         // stage 1 -- confirm the m100 is alive
         self.port.write(&[0xFE])?;
         self.port.flush()?;
@@ -118,7 +116,7 @@ impl M100Device {
         match bank {
             MemoryBank::Reserved => Err(anyhow!("cannot read_all_data the Reserved memory bank")),
             MemoryBank::Epc => Ok(self.read_chunked_data(password, bank, 12, 2)?),
-            MemoryBank::Tid => Ok(self.read_chunked_data(password, bank, 4, 2)?),
+            MemoryBank::Tid => Ok(self.read_data(password, bank, 0, 32)?.to_vec()),
             MemoryBank::User => Ok(self.read_chunked_data(password, bank, 0, 512)?),
         }
     }
@@ -160,27 +158,13 @@ impl M100Device {
         address: u16,
         data: &mut [u8],
     ) -> Result<()> {
-        let command = unsafe {
-            match bank {
-                MemoryBank::Epc => m100_sys::writeEPC(
-                    password.as_ptr(),
-                    0x01,
-                    data.as_mut_ptr(),
-                    data.len() as _,
-                    self.pbuf.as_mut_ptr() as _,
-                ),
-                _ => m100_sys::writeData(
-                    password.as_ptr(),
-                    0x01,
-                    bank as u32,
-                    address,
-                    data.len() as _,
-                    data.as_mut_ptr() as _,
-                    self.pbuf.as_mut_ptr() as _,
-                ),
-            }
-        };
-        self.send_command(command)?;
+        let command = match bank {
+            MemoryBank::Epc => protocol::write_epc(password, data),
+            other => protocol::write_data(password, other, address, data),
+        }?;
+        self.port.write(&command)?;
+        self.port.flush()?;
+
         let res = self.receive_response()?;
         if res.len() == 1 {
             if res[0] == 0xB0 {
@@ -206,18 +190,12 @@ impl M100Device {
                 data_length
             ));
         }
-        let command = unsafe {
-            m100_sys::readData(
-                password.as_ptr() as *const _,
-                0x01,
-                bank as u32,
-                address,
-                data_length / 2,
-                self.pbuf.as_mut_ptr() as *mut _,
-            )
-        };
-        self.send_command(command)?;
+        let command = protocol::read_data(password, bank, address, data_length)?;
+        self.port.write(&command)?;
+        self.port.flush()?;
+
         let res = self.receive_response()?;
+        println!("res: {:2x}", res[0]);
         if res.len() == 1 {
             if res[0] == 0x09 {
                 return Err(anyhow!("Read failure HEXIN_FAIL_READ"));
@@ -230,22 +208,11 @@ impl M100Device {
     }
 
     fn disable_sleep(&mut self) -> Result<()> {
-        // let command = unsafe { m100_sys::deepSleepTime(29, self.pbuf.as_mut_ptr()) };
-        // self.send_command(command)?;
-        // self.receive_response()?;
-
-        let command = unsafe { m100_sys::idle(0x00, 0x00, self.pbuf.as_mut_ptr()) };
-        self.send_command(command)?;
-        self.receive_response()?;
-
-        Ok(())
-    }
-
-    fn send_command(&mut self, len: u32) -> Result<()> {
-        let to_send = &self.pbuf[0..len as usize];
-        println!("Native: {:?}", to_send);
-        self.port.write(to_send)?;
+        let command = protocol::idle()?;
+        self.port.write(&command)?;
         self.port.flush()?;
+
+        self.receive_response()?;
 
         Ok(())
     }
