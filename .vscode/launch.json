@@ -1,0 +1,50 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'm100util'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=m100util",
+                    "--package=m100util"
+                ],
+                "filter": {
+                    "name": "m100util",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--port",
+                "/dev/ttyACM1",
+                "read",
+                "tid"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'm100util'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=m100util",
+                    "--package=m100util"
+                ],
+                "filter": {
+                    "name": "m100util",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

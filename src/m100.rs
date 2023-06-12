@@ -218,9 +218,10 @@ impl M100Device {
     }
 
     fn receive_response(&mut self) -> Result<&[u8]> {
+        println!("wAITING REPONSE");
         self.port.read_exact(&mut self.read_buf[0..5])?;
         let length = i16::from_be_bytes([self.read_buf[3], self.read_buf[4]]); // header
-                                                                               // println!("Incoming data length from response: {}", length);
+        println!("Incoming data length from response: {}", length);
         self.port
             .read_exact(&mut self.read_buf[5..5 + length as usize])?; // body
         self.port

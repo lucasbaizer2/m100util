@@ -5,6 +5,7 @@ use std::io::Write;
 use crate::m100::{HfssStatus, MemoryBank};
 
 #[repr(u8)]
+#[derive(Debug, Clone, Copy)]
 pub enum Command {
     GetVersion = 0x03,
     Idle = 0x04,
@@ -84,6 +85,8 @@ pub fn make_frame(cmd: Command, payload: &[u8]) -> Result<Vec<u8>> {
     let checksum: u32 = packet.iter().skip(1).map(|b| *b as u32).sum();
     packet.write_u8((checksum & 0xFF) as u8)?; // checksum
     packet.write_u8(0x7E)?; // MAGICRF_TAIL
+
+    println!("cmd {:?} made frame {:2x?}", cmd, packet);
 
     Ok(packet)
 }
